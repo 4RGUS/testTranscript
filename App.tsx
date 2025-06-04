@@ -1,131 +1,95 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import {useEffect, useState} from 'react';
 import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
+  Button,
   Text,
-  useColorScheme,
   View,
+  StyleSheet,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
-
 import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  TranscriptionEventEmitter,
+  startListening,
+  stopListening,
+  destroyRecognizer,
+  language,
+} from 'react-native-transcription';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+export default function App() {
+  const [results, setResults] = useState<string[]>([]);
+  const [partialResults, setPartialResults] = useState<string[]>([]);
+  const [error, setError] = useState<number | null>(null);
+  useEffect(() => {
+    console.log(Platform.OS === 'android');
+    const resultListener = TranscriptionEventEmitter.addListener(
+      'onSpeechResults',
+      event => {
+        console.log('Result from native:', event);
+        setResults(event.results || []);
+      },
+    );
+    const partialResultListener = TranscriptionEventEmitter.addListener(
+      'onSpeechPartialResults',
+      event => {
+        console.log('Partial result from native:', event);
+        setPartialResults(event.results || []);
+        // Handle partial results if needed
+      },
+    );
+    const errorListener = TranscriptionEventEmitter.addListener(
+      'onSpeechError',
+      event => {
+        console.log('onSpeechError', event);
+        setError(event.error);
+      },
+    );
+    return () => {
+      resultListener.remove();
+      partialResultListener.remove();
+      errorListener.remove();
+      destroyRecognizer();
+    };
+  }, []);
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
-
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  // Request permission on Android
+  const requestPermission = async () => {
+    if (Platform.OS === 'android') {
+      alert('hi');
+      await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ).then(result => {
+        if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.warn('Audio permission denied');
+          setError('Audio permission denied');
+        } else {
+          console.log('Audio permission granted');
+        }
+      });
+    }
   };
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  useEffect(() => {
+    requestPermission();
+  }, []);
 
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <View style={styles.container}>
+      <Button
+        title="Start Listening"
+        onPress={() => startListening(language.arabicSA)}
       />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
+      <Button title="Stop Listening" onPress={() => stopListening()} />
+      <Text>RealTime results: {partialResults.join(', ')}</Text>
+      <Text>Final Results: {results.join(', ')}</Text>
+      {error !== null && <Text>Error: {error}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
-
-export default App;
